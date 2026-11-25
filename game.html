@@ -1,0 +1,352 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Purple Heart Catcher</title>
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@200;400;600;700&display=swap" />
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: "Poppins", sans-serif;
+            background: linear-gradient(135deg, #f3e8ff, #e9d5ff, #f5d0fe);
+        }
+
+        /* Score panel */
+        .score-board {
+            position: fixed;
+            top: 25px;
+            right: 30px;
+            background: white;
+            padding: 15px 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px #8b5cf633;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .score-board h3 {
+            margin: 0;
+            color: #9333ea;
+            font-size: 17px;
+        }
+
+        .score {
+            font-size: 32px;
+            font-weight: 700;
+            color: #7e22ce;
+        }
+
+        /* Falling hearts */
+        .heart {
+            position: fixed;
+            top: -40px;
+            font-size: 30px;
+            user-select: none;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* Bucket */
+        .bucket {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            width: 100px;
+            height: 65px;
+            transform: translateX(-50%);
+            border: 5px solid #9333ea;
+            border-top: 8px solid #7e22ce;
+            border-radius: 5px 5px 25px 25px;
+            background: linear-gradient(135deg, #c084fc, #9333ea);
+            box-shadow: 0 5px 15px #7e22ce55;
+            z-index: 5;
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .bucket::before {
+            content: "";
+            position: absolute;
+            width: 110px;
+            height: 15px;
+            border: 5px solid #7e22ce;
+            border-radius: 10px;
+            top: -15px;
+            left: -10px;
+            background: #d8b4fe;
+        }
+
+        /* Instructions */
+        .instructions {
+            position: fixed;
+            bottom: 110px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #7e22ce;
+            font-size: 14px;
+            text-align: center;
+            width: 90%;
+        }
+
+        /* Game over */
+        .game-over {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #2e1065bb;
+            z-index: 20;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .game-over-content {
+            background: white;
+            padding: 35px;
+            border-radius: 20px;
+            text-align: center;
+            width: 300px;
+            box-shadow: 0 10px 40px #0003;
+        }
+
+        .game-over h1 {
+            color: #9333ea;
+            margin: 0 0 10px;
+        }
+
+        .game-over p {
+            color: #6b21a8;
+        }
+
+        button {
+            background: #9333ea;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #7e22ce;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Score -->
+    <div class="score-board">
+        <h3>💜 Collected</h3>
+        <div class="score" id="score">0</div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="instructions">
+        Move the bucket left and right to catch purple hearts! 💜
+        <br>
+        Avoid the black hearts! 🖤
+    </div>
+
+    <!-- Bucket -->
+    <div class="bucket" id="bucket"></div>
+
+    <!-- Game Over Screen -->
+    <div class="game-over" id="gameOver">
+        <div class="game-over-content">
+            <h1>Game Over! 🖤</h1>
+            <p>You caught a black heart!</p>
+            <h2>💜 Collected: <span id="finalScore">0</span></h2>
+            <button onclick="restartGame()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const bucket = document.getElementById("bucket");
+        const scoreDisplay = document.getElementById("score");
+        const gameOverScreen = document.getElementById("gameOver");
+        const finalScore = document.getElementById("finalScore");
+
+        let score = 0;
+        let gameRunning = true;
+        let spawnInterval;
+        let hearts = [];
+
+        // Move bucket horizontally
+        function moveBucket(x) {
+            if (!gameRunning) return;
+
+            const halfWidth = bucket.offsetWidth / 2;
+
+            let newX = x;
+
+            newX = Math.max(
+                halfWidth,
+                Math.min(window.innerWidth - halfWidth, newX)
+            );
+
+            bucket.style.left = newX + "px";
+        }
+
+        // Mouse movement
+        document.addEventListener("pointermove", (e) => {
+            if (e.pointerType === "mouse" && e.buttons === 0) {
+                moveBucket(e.clientX);
+            }
+        });
+
+        // Drag or touch bucket
+        bucket.addEventListener("pointerdown", (e) => {
+            bucket.setPointerCapture(e.pointerId);
+            moveBucket(e.clientX);
+        });
+
+        bucket.addEventListener("pointermove", (e) => {
+            if (e.buttons !== 0 || e.pointerType === "touch") {
+                moveBucket(e.clientX);
+            }
+        });
+
+        // Create falling hearts
+        function createHeart() {
+            if (!gameRunning) return;
+
+            const heart = document.createElement("div");
+
+            heart.classList.add("heart");
+
+            // 75% purple hearts, 25% black hearts
+            const isBlack = Math.random() < 0.25;
+
+            heart.innerText = isBlack ? "🖤" : "💜";
+
+            heart.dataset.type = isBlack ? "black" : "purple";
+
+            heart.style.left = Math.random() * (window.innerWidth - 40) + "px";
+
+            document.body.appendChild(heart);
+
+            hearts.push({
+                element: heart,
+                y: -40,
+                speed: Math.random() * 2 + 2
+            });
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            const bucketRect = bucket.getBoundingClientRect();
+
+            hearts.forEach((heart, index) => {
+
+                heart.y += heart.speed;
+
+                heart.element.style.top = heart.y + "px";
+
+                const heartRect = heart.element.getBoundingClientRect();
+
+                // Collision detection
+                const caught =
+                    heartRect.bottom >= bucketRect.top &&
+                    heartRect.top <= bucketRect.bottom &&
+                    heartRect.right > bucketRect.left &&
+                    heartRect.left < bucketRect.right;
+
+                if (caught) {
+
+                    if (heart.element.dataset.type === "purple") {
+
+                        // Purple heart collected
+                        score++;
+
+                        scoreDisplay.innerText = score;
+
+                        heart.element.remove();
+
+                        hearts.splice(index, 1);
+
+                    } else {
+
+                        // Black heart = Game Over
+                        heart.element.remove();
+
+                        hearts.splice(index, 1);
+
+                        endGame();
+                    }
+                }
+
+                // Remove hearts that leave the screen
+                else if (heart.y > window.innerHeight) {
+
+                    heart.element.remove();
+
+                    hearts.splice(index, 1);
+                }
+            });
+
+            if (gameRunning) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // End game
+        function endGame() {
+            gameRunning = false;
+
+            clearInterval(spawnInterval);
+
+            finalScore.innerText = score;
+
+            gameOverScreen.style.display = "flex";
+        }
+
+        // Restart game
+        function restartGame() {
+
+            hearts.forEach(heart => {
+                heart.element.remove();
+            });
+
+            hearts = [];
+
+            score = 0;
+
+            scoreDisplay.innerText = score;
+
+            gameOverScreen.style.display = "none";
+
+            bucket.style.left = "50%";
+
+            gameRunning = true;
+
+            startGame();
+        }
+
+        // Start game
+        function startGame() {
+
+            spawnInterval = setInterval(createHeart, 700);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        startGame();
+
+    </script>
+
+</body>
+</html>
